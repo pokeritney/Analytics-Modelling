@@ -1,0 +1,19 @@
+---
+title: "Hw9"
+output: word_document
+---
+
+Question 12.1
+Suppose we would like to open a coffee shop: what can I do to make it as successful as any Starbucks coffee shop? I can first make several products for the menu, and design experiments to test what kind of products are most favored by customers in order to increase our turnover rate. For example, I can make alternatives to be choices of: coffee type(espresso, mocha etc), coffee aroma(strong, medium, light), coffee taste(sweetness, sourness), and maybe some more fancy stuff like colorfulness of our cups or whether we put latte art on coffee. Hopefully the experiment can make a great coffee shop.
+
+Question 12.2
+```{r}
+set.seed(42)
+library(FrF2)
+#Generate a 16 run, 10 factor, 2 level fractional factorial design
+One <- FrF2(16,10) #16 houses, 10 yes/no
+Two <- FrF2(16,10)
+One
+Two
+```
+

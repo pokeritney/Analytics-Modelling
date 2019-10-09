@@ -1,0 +1,186 @@
+---
+title: "ISyE6501 HW2"
+output: word_document
+---
+
+Question 3.1
+First set up my data file and load kknn library.
+```{r}
+rm(list = ls())
+library(kknn)
+set.seed(42)
+CCdata <- read.table("credit_card_data.txt", stringsAsFactors = FALSE, header = FALSE)
+```
+Q 3.1 (a) For part a, I creat a KNN model for cross validating using leave-one-out (train.kknn) method in R, because leave-one-out cross validation is computationally efficient. Since we are testing the model using the entire dataset for part a, I just write a for loop to test through each K, and compare the fitted values from each model to the response values, to find out which K within 1-100 renders the highest accuracy of predicting, from where I find out the best K and best classifier. The best K by the highest accuracy will overwrite whichever the model gives us since our response is discrete data. And I will do splitting of data in part b.
+```{r}
+accuracy <- c()
+for (k in 1:50) {
+  model <- train.kknn(V11~., CCdata, kmax=k, scale=TRUE)
+  pred_k <- as.integer(fitted(model)[[k]][1:nrow(CCdata)] + 0.5)
+  accuracy[k] = sum(pred_k == CCdata[,11])/nrow(CCdata)}
+kval <- c(1:50)
+plot(kval,accuracy)
+max(accuracy)
+which.max(accuracy)
+```
+From the result of the leave-one-out cross validation model, when K=12 the prediction is the most accurate at 85.32%. So our best classifier is k=12.
+
+Second, we can use the cv.kknn function to perform a specific type of cross-validation on the dataset too. I use 10-fold cross-validation in my model because it is mentioned in the course video that 10 folds are common. And then I compare different models to get the best K by a for loop.
+```{r}
+set.seed(42)
+accuracy <- c()
+for (k in 1:50) {
+  model_cv <- cv.kknn(V11~., CCdata, kcv=10, k=k,scale=TRUE) #10-fold cross-validation
+  pred_k <- as.integer(model_cv[[1]][,2] + 0.5)
+  accuracy[k] = sum(pred_k == CCdata[,11])/nrow(CCdata)}
+kval <- c(1:50)
+plot(kval,accuracy)
+max(accuracy)
+which.max(accuracy)
+```
+Using cv.kknn function and 10 fold cross-validation, our best classifier is when k=12, and it renders the highest accuracy of 86.09%.
+
+Q 3.1 (b)
+First I use R's built in function sample to split the data set into three groups. I want the traning, validation and testing data to be 60/20/20 percent randomly chosen from the dataset. I separate the traning data first, which is 60% of the credit card data file.Then I divide equally the rest of CCdata file into the validation and testing datasets.
+```{r}
+set.seed(42)
+data_train = sample(1:nrow(CCdata), size = round(nrow(CCdata)*0.6), replace = FALSE)
+data_traning = CCdata[data_train,]
+data_rest = CCdata[-data_train,]
+data_vali = sample(1:nrow(data_rest), size = round(nrow(data_rest)/2), replace = FALSE)
+data_validation = data_rest[data_vali,]
+data_testing = data_rest[-data_vali,]
+```
+Than I train the k-nearest-neighbor model with my training data just extracted. Again I write a for loop to loop over different k values and compare the fitted values of each model to the validation set. By comparing the accuracies of each K/each model, we find the best model(s).
+```{r}
+set.seed(42)
+library(kknn)
+accuracy <- c()
+for (x in 1:50) {
+  model_knn <- kknn(V11~., data_traning, data_validation, k=x, scale=TRUE)
+  accuracy[x] = sum(round(fitted(model_knn)) == data_validation[,11])/nrow(data_validation)}
+kval <- c(1:50)
+plot(kval,accuracy)
+max(accuracy)
+accuracy
+```
+So from the output and the k value vs accuracy chart, we see that when k=7-10, 14-17, and 34-38 the models are the most accurate, with the accuracy of 86.26% on the validation set. After finding the best models, I plug the k values back into the model, run the best model on test data to test the accuracies of different models. Then the best models with higher accuracy is our best classifier.
+```{r}
+set.seed(42)
+library(kknn)
+kbest <- c(7:10, 14:17, 34:38)
+accbest <- c()
+for (x in kbest) {
+  model_best <- kknn(V11~., data_traning, data_testing, k=x, scale=TRUE)
+  accbest[x] = sum(round(fitted(model_best)) == data_testing$V11)/nrow(data_testing)
+}
+plot(accbest)
+max(accbest)
+which.max(accbest)
+accbest
+```
+So based on the testing dataset, our final measure of the model is when k=10, the model predicts the testing dataset of 85.50% accuracy. The final measure does not differ significantly from the results above on the traning dataset. Thus we can conclude that our best classifier using KNN model is when k=10.
+
+Question 4.1
+A clustering model would be appropriate is when anticipating a college graduate's salary level. We can use different predictors to predict a recent graduate's level of salary. A few predictors that can be used include major, GPA, intern experience, and extracurricular activities. For example, a graduate with high GPA and lots of intern experiences are more expected to have higher salary than other graduates. And a graduate with average GPA and only 1 intern are anticipated to get only median salary. Since we do not know what will happen to a college student after they graduate, a clustering model can be appropriate because it is unsupervised learning.
+
+Question 4.2
+First I set up iris file. And I exam the data to get a first impression of the data. 
+```{r}
+rm(list = ls())
+data <- read.table("iris.txt", header = TRUE)
+head(data)
+table(data$Species)
+```
+
+Next, we would like to use kmeans function in R to build the clustering model. 
+A. Unscaled Data - First I will use unscaled data. And I write a for loop for K to test the model accuracy and choose the best K. I decide to test K between 1 to 10 because our data is relatively small. And I will set our nstart to 5 because choosing 5 random set will be appropriate for a small dataset.
+```{r}
+set.seed(42)
+withinss <- c()
+for (k in 1:10) {
+  cluster1 <- kmeans(data[,2:5], centers = k, nstart = 5) #the predictor colums are 2-5
+  withinss[k] = cluster1$tot.withinss 
+  print(table(cluster1$cluster, data$Species))}
+kval <- c(1:10)
+plot(kval, withinss, main = "The Elbow Method")
+```
+Using unscaled data, the k values vs withinss chart gives us the best K value, which is 3. As mentioned in the course video, as K increases, whenever the marginal withinss starts decrease much lesser, then there is no need to increase K anymore. Thus in this chart, we see that after K reaches 3, the decrease in withinss are almost the same. So our best model is k=3, which is 3 clusters.
+
+Another method to determine accuracy or the best K is to look at our tables. From above, we see that except for K=3, other K does not cluster data sets very well. For example, they give a cluster that contains data points from other clusters. Thus K=3 is our best K.
+```{r}
+cluster3 <- kmeans(data[,2:5], centers = 3, nstart = 5)
+table3 <- table(cluster3$cluster, data$Species)
+(sum(diag(table3)))/sum(table3)   
+```
+And K=3 predicts 89.33% accurate of the data points.
+
+B. Scaled Data - After building models with unscaled data, we need to build models with scaled data as well ,in case some data are not on the same magnititude.
+```{r}
+set.seed(42)
+withinss <- c()
+for (k in 1:10) {
+  cluster1 <- kmeans(scale(data[,2:5]), centers = k, nstart = 5) #scale the predictor colums 2-5
+  withinss[k] = cluster1$tot.withinss 
+  print(table(cluster1$cluster, data$Species))}
+kval <- c(1:10)
+plot(kval, withinss, main = "The Elbow Method Scaled")
+```
+Based on the chart, K is best also at k=3. However, we do not see an obvious "elbow" where the marginal withinss starts to remain stable. And based on the tables, we do not see a table that clusters very well neither. Thus for iris data, unscaled data file works better than scaled. And we will use unscaled data for the following analysis too.
+
+C. Explore Different combinations of variables - Next I am going to try different combination of the predictor variables and find which combination gives the highest accuracy.
+C(1). Try three predictor variables.
+```{r}
+cluster_three <- kmeans(data[,2:4], centers = 3, nstart = 5)
+table_three <- table(cluster_three$cluster, data$Species)
+accuracy = (sum(diag(table_three)))/sum(table_three)  
+accuracy
+```
+The accuracy is 88% when predicting with Sepal.Length Sepal.Width Petal.Length.
+
+```{r}
+cluster_three <- kmeans(data[,3:5], centers = 3, nstart = 5)
+table_three <- table(cluster_three$cluster, data$Species)
+accuracy = (sum(diag(table_three)))/sum(table_three) 
+accuracy
+```
+The accuracy is 95.3% when predicting with Sepal.Width Petal.Length Petal.Width
+
+C(2)Try two predictor variables - the easieast way to do is visualize the accuracy using ggplot.
+So we wonder if using the two variables "Sepal.Length" and "Sepal.Width" is a good clustering, we visualize them in the plot that the red dots are clearly clustered. But the green and blue dots are mixed, so the two variables are probably not a good clustering. V2 & V3
+```{r}
+library(ggplot2)
+ggplot(data,aes(Sepal.Length, Sepal.Width, color = Species)) + geom_point()
+```
+
+Then we use the other two variables to check, Petal.Length, Petal.Width. It seems like these two make a very clear and good cluster of species. V4 & V5
+```{r}
+ggplot(data,aes(Petal.Length, Petal.Width, color = Species)) + geom_point()
+```
+
+Then we try another one using Sepal.Length, Petal.Length. It looks there is a non-linear separation between the green dots and the blue dots, thus it is not ideal. V2& V4
+```{r}
+ggplot(data,aes(Sepal.Length, Petal.Length, color = Species)) + geom_point()
+```
+
+Finally the last one I try is using Sepal.Width, Petal.Width. And the cluster is very clear. V3 & V5
+```{r}
+ggplot(data,aes(Sepal.Width, Petal.Width, color = Species)) + geom_point()
+```
+Therefore, I decide to use V4 & V5(Petal.Length, Petal.Width) and V3 & V5(Sepal.Width, Petal.Width) to test their accuracy.
+```{r}
+cluster_two <- kmeans(data[,4:5], centers = 3, nstart = 5)
+table_two <- table(cluster_two$cluster, data$Species)
+accuracy = (sum(diag(table_two)))/sum(table_two)
+accuracy
+```
+Using V4 & V5(Petal.Length, Petal.Width), It cluster 95% of the data points right.
+
+```{r}
+cluster_two <- kmeans(data[,c(3, 5)], centers = 3, nstart = 5)
+table_two <- table(cluster_two$cluster, data$Species)
+accuracy = (sum(diag(table_two)))/sum(table_two)
+accuracy
+```
+Using V3 & V5(Sepal.Width, Petal.Width), It cluster 92.6% of the data points right.
+

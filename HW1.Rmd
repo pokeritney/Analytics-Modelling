@@ -1,0 +1,143 @@
+---
+title: "Homework 1"
+output:
+  word_document: default
+  html_document: default
+---
+
+Question 2.1
+     A case that a classification model would be appropriate is when shopping for a car, I use classification model to determine if this car is ideal for me to buy, concerning a few attributes.
+     A few predictors include price, gas consumption, engine power, and appearance. And we can draw a classifier line depending on which attributes to use. For example, I will buy a low price car with low gas consumption, but will not buy a high price car with high gas consumption.
+     
+
+Question 2.2
+
+2.2.1. First set up my files.
+```{r}
+rm(list = ls())
+library(kernlab)
+set.seed(42)
+setwd("E:/Gatech/ISYE6501 Intro Analytics Modeling/HW")
+```
+```{r}
+CCdata <- read.table("credit_card_data.txt", stringsAsFactors = FALSE, header = FALSE)
+head(CCdata)
+tail(CCdata)
+```
+Then run the model.
+```{r}
+CCmodel<- ksvm(V11~V1+V2+V3+V4+V5+V6+V7+V8+V9+V10, data = CCdata, type = "C-svc", kernel = "vanilladot", C = 100, scaled=TRUE)
+```
+```{r}
+CCmodel
+```
+
+attributes(CCmodel)
+Calculate the coefficients of the classifier:
+```{r}
+a <- colSums(CCmodel@xmatrix[[1]] * CCmodel@coef[[1]])
+a0 <- -CCmodel@b
+a
+a0
+```
+From above, we find the equation of the classifier:
+-0.0010065348X1-0.0011729048X2-0.0016261967X3+0.0030064203X4+1.0049405641X5-0.0028259432X6+
+0.0002600295X7-0.0005349551X8-0.0012283758X9+0.1063633995X10+0.08158492 =  0
+
+Even though we already have error=0.136086, we can use the predict function to see what model predicts and match the actual classification.
+```{r}
+pred <- predict(CCmodel,CCdata[,1:10])
+pred
+sum(pred == CCdata[,11]) / nrow(CCdata)
+```
+So the prediction rate is 86.39144% using C=100.
+
+Next, to further predicts model with higher accuracy, I try to change values for C.
+Using C=1:
+```{r}
+CCmodel <- ksvm(V11~V1+V2+V3+V4+V5+V6+V7+V8+V9+V10, data = CCdata, type = "C-svc", kernel = "vanilladot", C = 1, scaled=TRUE)
+```
+```{r}
+pred <- predict(CCmodel,CCdata[,1:10])
+pred
+sum(pred == CCdata[,11]) / nrow(CCdata)
+```
+
+
+Using C=0.01:
+```{r}
+CCmodel <- ksvm(V11~V1+V2+V3+V4+V5+V6+V7+V8+V9+V10, data = CCdata, type = "C-svc", kernel = "vanilladot", C = 0.01, scaled=TRUE)
+```
+```{r}
+pred <- predict(CCmodel,CCdata[,1:10])
+pred
+sum(pred == CCdata[,11]) / nrow(CCdata)
+```
+
+Using C=10,000:
+```{r}
+CCmodel <- ksvm(V11~V1+V2+V3+V4+V5+V6+V7+V8+V9+V10, data = CCdata, type = "C-svc", kernel = "vanilladot", C = 10000, scaled=TRUE)
+```
+```{r}
+pred <- predict(CCmodel,CCdata[,1:10])
+pred
+sum(pred == CCdata[,11]) / nrow(CCdata)
+```
+The prediction rate is 86.23853%, which is only slightly less than when C=100.
+We can tell that prediction is relatively stable between C=0.01 to 10,000. Since only when we need to increase C to 1*10^-8 and further or 1*10^8 and further,that would make the computation too expensive. Thus I can conclude the accuracies are stable around 86% between C=0.01 and C=10,000.
+
+Q.2.2.2
+Next I will try other non-linear kernel to see if they provide better predictions than linear(vanilladot)
+Using rbfdot:
+```{r}
+CCmodel <- ksvm(V11~V1+V2+V3+V4+V5+V6+V7+V8+V9+V10, data = CCdata, type = "C-svc", kernel = "rbfdot", C = 100, scaled=TRUE)
+pred <- predict(CCmodel,CCdata[,1:10])
+pred
+sum(pred == CCdata[,11]) / nrow(CCdata)
+```
+Which gve me accuracy of 95.25994%.
+
+Using polydot:
+```{r}
+CCmodel <- ksvm(V11~V1+V2+V3+V4+V5+V6+V7+V8+V9+V10, data = CCdata, type = "C-svc", kernel = "polydot", C = 100, scaled=TRUE)
+pred <- predict(CCmodel,CCdata[,1:10])
+pred
+sum(pred == CCdata[,11]) / nrow(CCdata)
+```
+Which gave me accuracy of 86.39144%, which equals to accuracy of linear kernel "vanilladot"
+
+Using tanhdot:
+```{r}
+CCmodel <- ksvm(V11~V1+V2+V3+V4+V5+V6+V7+V8+V9+V10, data = CCdata, type = "C-svc", kernel = "tanhdot", C = 100, scaled=TRUE)
+pred <- predict(CCmodel,CCdata[,1:10])
+pred
+sum(pred == CCdata[,11]) / nrow(CCdata)
+```
+Which gave me accuracy of 72.17125%, which is the least among all.
+Based on the three models I ran, it turned out that non-linear kernels can render either higher or lower accuracies than the linear kernel method. 
+
+Q.2.2.3 KKNN
+```{r}
+library(kknn)
+set.seed(42)
+accuracy = function(x) {
+  pred_i <- rep(0,(nrow(CCdata)))
+  for (i in 1:654) {
+    CCmodel_knn = kknn(V11~V1+V2+V3+V4+V5+V6+V7+V8+V9+V10, CCdata[-i,], CCdata[i,], k=x, distance = 2, kernel = "optimal", scale=TRUE)
+    pred_i[i] <- as.integer(fitted(CCmodel_knn) + 0.5) }
+  accuracies = sum(pred_i == CCdata[,11])/nrow(CCdata) 
+  return(accuracies)
+}
+
+acc = rep(0,30)
+for (x in 1:30) {
+  acc[x] = accuracy(x)
+}
+
+plot(acc)
+max(acc)
+which.max(acc)
+```
+To predict every i in our data points, I created a for loop to test every single data point from #1 to 654, and show the results of how many i(s) actually predict the same result as our actual data. And I also created a function - within the function exists a vector that estimate the binary result 0 or 1 for each data point. We will compare that prediction with our actual decision, and set accuracy equals to the percentage of our correct predictions, from where we know how well this model classifies the data point.
+
+Next, to find the good values of Ks, I create a for loop to repeat the model from K=1 to K=30. By picking a boundary of 30, we can make the computation easy and feasible. Because if k is too large, we can expect more fluctuation of the results for the specific data point. Limiting k to 30 might be a good option. And after repeating the model, I make a plot showing the Ks vs the accuracies. It turned out when k=12 and 15, out accuracies are the highest, which are 85.32%. Thus our best Ks between 1-30 are K=12 and 15.

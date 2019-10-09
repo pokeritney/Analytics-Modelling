@@ -1,0 +1,82 @@
+---
+title: "Hw5"
+output: word_document
+---
+
+Question 8.1
+We can use a linear regression model to find out what associates with a person's blood pressure.
+Some predictors I will use are age, gender, hours of exercise per day and intake of calories per day.
+For example, we may find that intake of calories per day has profound impact on that person's blood pressure.
+
+Question 8.2
+Clean environment and set up my file and model.
+```{r}
+rm(list = ls())
+set.seed(42)
+uscrime <- read.table("uscrime.txt", stringsAsFactors = FALSE, header = TRUE)
+lm_uscrime <- lm(Crime~., data = uscrime) #set up linear regression model
+lm_uscrime
+summary(lm_uscrime)
+```
+Now using the linear regression model we just built, predict the observed crime rate in a city with the following data:
+```{r}
+test_point <- data.frame(M = 14.0, So = 0, Ed = 10.0, Po1 = 12.0, Po2 = 15.5, LF = 0.640, M.F = 94.0, Pop = 150, NW = 1.1, U1 = 0.120, U2 = 3.6, Wealth = 3200, Ineq = 20.1, Prob = 0.04, Time = 39.0)
+```
+Next, predict the crime rate for test data point. Using our model, we predict the crime rate with below data is 155.43.
+```{r}
+pred_model <- predict(lm_uscrime, test_point)
+pred_model
+```
+To find out if this is a good prediction, we can perform cross validation:
+```{r}
+qqnorm(uscrime$Crime)
+qqline(uscrime$Crime)
+min(uscrime$Crime)
+```
+So what we predicted, 155, is less than the minimum of Crime column, which is 342. So this model might not predict very well.
+```{r}
+#use DAAG built-in cross validation function to get a more accurate analysis
+library(DAAG)
+set.seed(42)
+lm_uscrime_cv <- cv.lm(uscrime, lm_uscrime, m=4) #perform 4-fold CV because of small data
+```
+Now we can use the ouput to manually compute a CV R-Square
+R^2 = SSR/SST = 1-SSE/SST
+```{r}
+X = uscrime$Crime
+Y = lm_uscrime_cv$cvpred #Using predicted values from CV model to calculate R^2
+Xbar = mean(X)
+SST = sum((X-Xbar)^2)
+SSE = sum((X-Y)^2)
+R2 = 1 - SSE/SST
+R2
+```
+So our R-Square is 0.47, meaning that our model accounts for 47% of variability, which is still a good fit.
+
+To prevent overfitting, we can pull out some variables based on their significance value. I choose p-value >= 0.05 to be my cutoff. And it leaves us these variables only: "M Ed Po1 U2 Ineq Prob".
+```{r}
+sig_uscrime <- lm(Crime~M+Ed+Po1+U2+Ineq+Prob, data = uscrime)
+sig_uscrime
+summary(sig_uscrime)
+```
+And now we can plug in test point without non-significant variables.
+```{r}
+test_point1 <- data.frame(M = 14.0,Ed = 10.0, Po1 = 12.0, U2 = 3.6, Ineq = 20.1, Prob = 0.04)
+predict(sig_uscrime, test_point1)
+max(uscrime$Crime) #maximum of original data
+```
+Now the model seems to perform normally since predicted value is within the range of data.
+```{r}
+set.seed(42)
+sig_uscrime_cv <- cv.lm(uscrime, sig_uscrime, m=4) #perform cross validation on our new model
+```
+```{r}
+X = uscrime$Crime
+Y = sig_uscrime_cv$cvpred #Using predicted values from our new model to calculate R^2
+Xbar = mean(X)
+SST = sum((X-Xbar)^2)
+SSE = sum((X-Y)^2)
+R2 = 1 - SSE/SST
+R2
+```
+So the new model predicts way better than the old model. The new model without non-significant variables accounts for 72% variability, which is an excellent fit.

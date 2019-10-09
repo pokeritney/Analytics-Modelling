@@ -1,0 +1,185 @@
+---
+title: "Hw10"
+output: word_document
+---
+
+Question 14.1
+Read breast cancer dataset:
+```{r}
+set.seed(42)
+rm(list = ls())
+bc <- read.table("breast-cancer-wisconsin.data.txt", stringsAsFactors = FALSE, sep=",")
+summary(bc)
+```
+We can see that only V7 has missing data.
+Find all indices and rows of the missing data "?" in column V7:
+```{r}
+indices = which(bc$V7 == "?") #indices
+indices
+bc[indices,] #look at the rows of missing data
+```
+Now we need to make sure the percentage of missing data is less than 5%
+```{r}
+length(indices)/nrow(bc)
+```
+There is only about 2.3% so we can use imputation.
+
+To find out if the missing rows are biased in any way with respect to the response:
+```{r}
+bc_clean <- bc[-indices,] #data without missing values
+bc_missing <- bc[indices,] #data with missing values
+#table showing response variable for original:
+prop.table(table(bc$V11)) 
+```
+```{r}
+#table showing response variable for w/o missing data
+prop.table(table(bc_clean$V11)) 
+```
+```{r}
+#table showing response variable for with missing data
+prop.table(table(bc_missing$V11)) 
+```
+Their ratios are:
+```{r}
+0.6552217/0.3447783 #original
+0.6500732/0.3499268 #w/o missing
+0.875/0.125 #with missing
+```
+Based on only simple calculation, benign(2) response tends to have more missing values. But it is only an observation that might not even be true or affect our analysis.
+
+Q 14.1.1 Mean/Mode Imputation
+impute data with mean:
+```{r}
+mean <- mean(as.numeric(bc[-indices,"V7"]))
+mean #mean of rest of data except for missing
+bc_impute_mean <- bc
+bc_impute_mean[indices,]$V7 <- mean #convert missing data to mean
+bc_impute_mean$V7 <- as.integer(bc_impute_mean$V7)
+```
+So bc_impute_mean is the data with imputed mean.
+
+impute with mode:
+```{r}
+#the function to get mode:
+Mode <- function(x) {
+  ux <- unique(x)
+  ux[which.max(tabulate(match(x, ux)))]
+}
+mode <- as.numeric(Mode(bc[-indices,"V7"])) #get mode of rest of data except for missing
+mode
+bc_impute_mode <- bc
+bc_impute_mode[indices,]$V7 <- mode
+bc_impute_mode$V7 <- as.integer(bc_impute_mode$V7)
+```
+So bc_impute_mode is the data with imputed mode.
+
+Q 14.1.2 Regression Imputation
+build a regression model using the data without missing values:
+While building regression model, we need to take out column V11, which is the response we are going to predict later, because we need to avoid leaking information.
+```{r}
+bc_regression <- bc[-indices,2:10] #bc data without id and response
+bc_regression$V7 <- as.integer(bc_regression$V7)
+model_regression <- lm(V7~V2+V3+V4+V5+V6+V8+V9+V10, data=bc_regression) #build a model on V7 with other predictors
+summary(model_regression)
+```
+Thr breast cancer lump is a very complicated biological situation. Since the scope is out of my knowledge, I will only use the above regression instead of trying to "predict"" V7 using the "best" predictors.
+
+Get predictions for missing data and impute the new data:
+```{r}
+predict_V7 <- predict(model_regression, newdata=bc[indices,]) #prediction for V7
+bc_regression <- bc
+#round V7 column to integers between 1-10:
+bc_regression[indices,]$V7 <- round(predict_V7) #impute V7
+bc_regression$V7 <- as.numeric(bc_regression$V7)
+bc_regression$V7 <- as.integer(bc_regression$V7)
+```
+Next, make sure all V7 data are between 1-10:
+```{r}
+bc_regression$V7[bc_regression$V7 > 10] <- 10 #anything above 10 shoube 10
+bc_regression$V7[bc_regression$V7 < 1] <- 1 #anything below 1 should be 1
+```
+So bc_regression is the data with imputed prediction from regression.
+
+Q 14.1.3 Regression with Perturbation Imputation
+Instead of static regression prediction, now we can add some"random noise"" to your predicted regression value. By using R's built-in rnorm function, we can sample a randon number from the normal distribution of our predicted data.
+```{r}
+set.seed(42)
+#mean centered at predicted V7, with standard deviation of predicted V7
+predict_perturb <- rnorm(nrow(bc[indices,]), predict_V7, sd(predict_V7))
+predict_perturb
+```
+See the differences:
+```{r}
+predict_V7
+```
+Now we can impute data back and create a new data:
+```{r}
+bc_perturb <- bc
+bc_perturb[indices,]$V7 <- round(predict_perturb) #impute the perturbation data
+bc_perturb$V7 <- as.numeric(bc_perturb$V7)
+bc_perturb$V7 <- as.integer(bc_perturb$V7)
+#make sure imputed value are within 1-10:
+bc_perturb$V7[bc_perturb$V7 > 10] <- 10
+bc_perturb$V7[bc_perturb$V7 < 1] <- 1
+```
+So bc_perturb is the data with imputed prediction from regression with perturbation.
+
+Q14.1.4 Compare the results and quality of classification model (using KNN)
+(1)compare question 1,2,3
+i.With data of imputed mean:
+```{r}
+set.seed(42)
+library(kknn)
+model_mean <- cv.kknn(V11~V2+V3+V4+V5+V6+V7+V8+V9+V10, bc_impute_mean, kcv=5, k=2) #train a cross-validation 5-fold kknn model with data of imputed mean
+predicted <- as.integer(model_mean[[1]][,2] + 0.5) # round off to 2 or 4
+predicted
+accuracy <- sum(predicted == bc_impute_mean$V11)/nrow(bc_impute_mean)
+accuracy #accuracy
+```
+The model successfully classified 94.85% of data.
+
+ii.With data of imputed mode:
+```{r}
+set.seed(42)
+model_mode <- cv.kknn(V11~V2+V3+V4+V5+V6+V7+V8+V9+V10, bc_impute_mode, kcv=5, k=2)
+predicted <- as.integer(model_mode[[1]][,2] + 0.5) # round off to 2 or 4
+accuracy <- sum(predicted == bc_impute_mode$V11)/nrow(bc_impute_mode)
+accuracy
+```
+The model successfully classified 94.99% of data.
+
+iii.With data of imputed regression prediction:
+```{r}
+set.seed(42)
+model_re <- cv.kknn(V11~V2+V3+V4+V5+V6+V7+V8+V9+V10, bc_regression, kcv=5, k=2)
+predicted <- as.integer(model_re[[1]][,2] + 0.5) # round off to 2 or 4
+accuracy <- sum(predicted == bc_regression$V11)/nrow(bc_regression)
+accuracy
+```
+The model successfully classified 94.56% of data.
+
+iv. With data of imputed regression with perturbation:
+```{r}
+set.seed(42)
+model_perturb <- cv.kknn(V11~V2+V3+V4+V5+V6+V7+V8+V9+V10, bc_perturb, kcv=5, k=2)
+predicted <- as.integer(model_perturb[[1]][,2] + 0.5) # round off to 2 or 4
+accuracy <- sum(predicted == bc_perturb$V11)/nrow(bc_perturb)
+accuracy
+```
+The model successfully classified 94.42% of data.
+
+(2) the data that remains after data points with missing values are removed:
+```{r}
+bc_removed <- bc[-indices,] #remove entire rows with missing data
+bc_removed$V7 <- as.numeric(bc_removed$V7)
+set.seed(42)
+model_remove <- cv.kknn(V11~V2+V3+V4+V5+V6+V7+V8+V9+V10, bc_removed, kcv=5, k=2)
+predicted <- as.integer(model_remove[[1]][,2] + 0.5) # round off to 2 or 4
+accuracy <- sum(predicted == bc_removed$V11)/nrow(bc_removed)
+accuracy
+```
+The model successfully classified 95.46% of data.
+
+In summary, the data without missing values seem to perform slightly better than anyone else.
+
+Question 15.1

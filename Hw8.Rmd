@@ -1,0 +1,144 @@
+---
+title: "Hw8"
+output: word_document
+---
+
+Question 11.1
+1. Stepwise regression
+Load the data and fit a regression model first.
+```{r}
+rm(list = ls())
+uscrime <- read.table("uscrime.txt", stringsAsFactors = FALSE, header = TRUE)
+fitcrime <- lm(Crime~., data = uscrime) #fit a regression model on uscrime data
+```
+Next run the feature selection. Stepwise regression as stated in the lecture, features direction of "both" forward and backward.
+```{r}
+library(MASS)
+step1 <- step(fitcrime, direction = "both", trace = FALSE) #stepwise regression using AIC
+summary(step1) #view the model
+```
+Therefore, our resulted model using stepwise regression is Crime=-6426.10+93.32M+180.12Ed+102.65Po1+22.34M.F-6086.63U1+187.35U2+61.33Ineq-3796.03Prob. The R^2=0.79 and the adjusted R^2=0.74 is pretty close, we can infer that there is no much overfitting. We will perform a cross-validation later to validate resulted model.
+
+A stepwise regression by using a BIC stopping rule:
+```{r}
+stepbic <- step(fitcrime, direction = "both", k=log(47), trace = FALSE) #setting k=log(our data points)
+summary(stepbic)
+```
+Using BIC stopping rule, our regression is  Crime=-5040.50+105.02M+196.47Ed+115.02Po1+89.37U2+67.65Ineq-3801.84Prob. We see that using BIC stopping rule renders us a simpler model with almost the same quality(R^2=0.77 and the adjusted R^2=0.73). 
+
+Cross validation for AIC stepwise regression:
+```{r}
+library(DAAG)
+model1 <- lm(Crime ~ M + Ed + Po1 + M.F + U1 + U2 + Ineq + Prob, data = uscrime) #filtered model by AIC stepwise
+c <- cv.lm(uscrime, model1, m=5) #5-fold cross-validation
+SStot <- sum((uscrime$Crime - mean(uscrime$Crime))^2) #SST
+SSres_c <- attr(c,"ms")*nrow(uscrime) #SSE
+1 - SSres_c/SStot #R^2 for cross-validated
+```
+So our AIC stepwise regression R^2 using 5 fold cross-validation is 56.4%.
+
+Cross validation for BIC stepwise regression:
+```{r}
+model2 <- lm(Crime ~ M + Ed + Po1 + U2 + Ineq + Prob, data = uscrime) #filtered model by BIC stepwise
+c <- cv.lm(uscrime, model2, m=5) #5-fold cross-validation
+SStot <- sum((uscrime$Crime - mean(uscrime$Crime))^2) #SST
+SSres_c <- attr(c,"ms")*nrow(uscrime) #SSE
+1 - SSres_c/SStot #R^2 for cross-validated
+```
+So our BIC stepwise regression R^2 using 5 fold cross-validation is 63.8%. As predicted, simpler model does have a higher quality.
+
+2. Lasso
+"lambda" or "alpha"= 1 for Lasso. First we need to convert our data to matrix.
+```{r}
+library(glmnet)
+set.seed(42)
+#scale the data
+x <- as.matrix(uscrime[,-16])
+y <- as.double(as.matrix(uscrime[,16]))
+```
+Next run a cross-validation Lasso regression:
+```{r}
+lasso <- cv.glmnet(x, y, standardize = TRUE, alpha = 1, nfolds = 5) #scale the data thus setting standardize to true, fold set to 5 for a small dataset
+summary(lasso)
+lasso$lambda #list of lambdas to choose and need to choose a min error
+lasso$lambda.min #min lambda
+lasso$cvm
+```
+Plot cross-validated MSE vs Lambda:
+```{r}
+plot(lasso$lambda, lasso$cvm, main = "Cross-validated MSE vs Lambda", xlab = "Lambda", ylab = "Cross-validated MSE")
+abline(v = lasso$lambda.min, col="blue", lty = 2)
+```
+As shown by the graph, cross-validated mean squared error reaches its lowest value as lambda reaches the minimum, and increases significantly after the minimum value. It is a way of visualizing why the minimum lambda should be chosen for the sake of variable selection.
+
+So the minimum lambda is 5.8. Setting lambda to minimum, our model is:
+```{r}
+coef(lasso, s=lasso$lambda.min)
+```
+
+The mean CV-error of the best model:
+```{r}
+lasso$cvm[lasso$lambda == lasso$lambda.min]
+```
+Rerun without lambda constraint and interpret the model:
+```{r}
+lasso <- cv.glmnet(x, y, standardize = TRUE, alpha = 1, nfolds = 5)
+coef = coef(lasso, s=lasso$lambda.min)
+predicted <- c()
+for (i in seq(1,47,1)){ #using coefficients produced by elastic net model to predict crime
+  pred <- sum(coef[-1]*x[i,])+coef[1]
+  predicted <- c(predicted, pred)
+}
+predicted
+```
+R^2 for Lasso:
+```{r}
+SStot <- sum((uscrime$Crime - mean(uscrime$Crime))^2) #SST
+SSres <- sum((uscrime$Crime - predicted)^2) #SSE
+1 - SSres/SStot #R^2 for lasso model
+```
+R^2 for Lasso filtered regression is 78.2%. Although it is debatable whether rerun the model with selected variables by lasso, it turns out lasso predicts very well.
+
+3. Elasctic Net
+Instead of setting alpha=1, loop through potential values of alpha between 0 and 1 to choose the best value of alpha.
+```{r}
+library(glmnet)
+set.seed(42)
+x <- as.matrix(uscrime[,-16])
+y <- as.double(as.matrix(uscrime[,16]))
+```
+
+Record the minimum lambdas through alpha=0 to 1(excluded because lasso alpha=1):
+```{r}
+set.seed(42)
+netalpha <- seq(0,1,0.01) #100 alphas
+minlambda <- c() #emplty vector to record minimum lambda of each model
+for (i in netalpha) {
+  net <- cv.glmnet(x, y, standardize = TRUE, alpha = i, nfolds = 5) #alpha=i
+  minlambda <- c(minlambda, net$lambda.min) #min lambda of each model
+}
+minlambda
+netalpha
+min(minlambda) #minimum lambda of different models
+which.min(minlambda) #i=?
+```
+So the best elastic net model is when alpha=0.28, minimum lambda is 0.124.
+
+Using the "best" model to make predictions: alpha = 0.28
+```{r}
+netbest <- cv.glmnet(x, y, standardize = TRUE, alpha = 0.28, nfolds = 5)
+coef = coef(netbest, s=netbest$lambda.min)
+predicted <- c()
+for (i in seq(1,47,1)){ #using coefficients produced by elastic net model to predict crime
+  pred <- sum(coef[-1]*x[i,])+coef[1]
+  predicted <- c(predicted, pred)
+}
+predicted
+```
+Calculate R^2:
+```{r}
+SStot <- sum((uscrime$Crime - mean(uscrime$Crime))^2) #SST
+SSres <- sum((uscrime$Crime - predicted)^2) #SSE
+1 - SSres/SStot #R^2 for elastic net model
+```
+So R^2 by elastic net is 78%.

@@ -1,0 +1,66 @@
+---
+title: "Hw6"
+output: word_document
+---
+
+Question 9.1
+In order to apply Principal Component Analysis and then create a regression model using the first few principal components, we need to first determine if PCA should be applied and how many principal components we should use.
+```{r}
+rm(list = ls()) #clean my environment and set up file
+set.seed(42)
+uscrime <- read.table("uscrime.txt", stringsAsFactors = FALSE, header = TRUE) #use uscrime data from hw5
+library(GGally)
+ggpairs(uscrime, columns = c("Po1", "Po2", "U1", "Ineq")) #use ggpairs to see correlation between predictors
+```
+Looks like Po1 and Po2 are highly correlated since their correlation is close to 1. That is why we need to use PCA model to reduce correlation among predictors. From there we find a simpler model to avoid overfit.
+```{r}
+PCA <- prcomp(uscrime[,1:15], scale. = TRUE) #run PCA on the matrix of scaled predictors
+summary(PCA)
+```
+```{r}
+PCA$rotation #get the matrix of eigenvectors
+screeplot(PCA, type = 'lines', col='blue') #plot variances of each principal component to help decide how many principal components to use
+```
+We can see that the marginal variance starts to decrese after PC=4 so we can choose PC=4.
+```{r}
+PC <- PCA$x[,1:4] #get first 4 principal components
+PC
+```
+Now we can build a linear regression model with the first 4 principal components.
+```{r}
+uscrimePC <- cbind(PC, uscrime[,16]) 
+modelPCA <- lm(V5~., data = as.data.frame(uscrimePC))
+summary(modelPCA)
+```
+Now we have the new model, we can specify the new model in terms of the original variables.
+```{r}
+a0prime <- modelPCA$coefficients[1] #our PCA model's intercept
+aiprime <- modelPCA$coefficients[2:5] #the vector of the rest of the coefficients for PC1-PC4
+```
+From the lecture we know PCA$rotation is our "V", which are all the matrix of eigenvectors of XTX. V=[V1, V2...] where Vj is the jth eigenvector.
+Since we scaled the data by Xi'=(Xi - MUi)/sigma_i, plug this in to X = a0+sum(ai*xi)
+Our original a0=(a0'-sum(ai'*MUi/sigma_i))
+ai = ai'/sigma_i
+Now only left us some algebra to do:
+```{r}
+alpha <- PCA$rotation[,1:4] %*% aiprime #Get our eigenvectors of 4 principal components and multiply by the coefficients
+library(matrixStats)
+MU <- colMeans(uscrime[,1:15]) # mean for each variables of original data
+sigma <- sapply(uscrime[,1:15],sd) # standard deviation for each variables of original data
+a0 <- a0prime-sum(alpha*MU/sigma) #original intercept
+ai <- alpha/sigma #original coefficients
+```
+Now we get the original linear equation: X = a0+sum(ai*xi). Plug the a0 and ai in, We can use the new model to predict data points in HW5.
+```{r}
+newpredict <- as.matrix(uscrime[,1:15]) %*% ai + a0 #new prediction of data after PCA
+SStot <- sum((newpredict - mean(uscrime$Crime))^2)
+SSE <- sum((uscrime$Crime - mean(uscrime$Crime))^2)
+R2 = 1-SSE/SStot
+R2
+```
+```{r}
+test <- data.frame(M = 14.0,So = 0, Ed = 10.0, Po1 = 12.0, Po2 = 15.5,LF = 0.640, M.F = 94.0, Pop = 150, NW = 1.1, U1 = 0.120, U2 = 3.6, Wealth = 3200, Ineq = 20.1, Prob = 0.040,Time = 39.0)
+predPCA <- data.frame(predict(PCA, test))
+pred <- predict(modelPCA, predPCA)
+pred
+```

@@ -1,0 +1,55 @@
+---
+title: "HW3"
+output: word_document
+---
+
+Question 5.1
+First I clean the environment and set up my files.
+```{r}
+rm(list = ls())
+library(outliers)
+uscrime <- read.table("uscrime.txt", stringsAsFactors = FALSE, header = TRUE)
+head(uscrime)
+crime <- uscrime[,"Crime"]
+```
+Next we would like to quickly visualize the "crime" column because later we need determine the outliers. It looks like from the plot of "crime", there are few points way above everyone else. But we still need to conduct the normality tests to find out.
+```{r}
+plot(crime)
+plot(rep(0,length(crime)),crime)
+plot(uscrime$Pop, crime)
+```
+Before the grubb test, we need to check for normality of the crime data since this is an assumption of the Grubbs test. Null hypothesis is "Data is normally distributed". By performing a Shapiro normality test,the test gives us a p-value of = 0.002, which is very small (<0.5). Thus the small p-value indicates strong evidence against the null hypothesis, so we reject the null hypothesis. Our "crime" data is not normally distributed.
+On the other hand, our QQ plot shows a heavily skewed tail on the upper right corner. If data are normally distributed, the points should distributed along the qq line. However, the qq plot also shows that our "crime data" is not normally distributed.
+A botplot of "crime" also shows us that there are few points above the maximum quantile, which indicates outliers.
+```{r}
+shapiro.test(crime)
+qqnorm(crime)
+qqline(crime)
+boxplot(crime)
+```
+
+Finally, we need to conduct grubb tests to conduct one-tail and two tail tests for outliers.
+
+I. First we need to test(11) if lowest and highest value are two outliers on opposite tails of sample. Null hypothesis: Not both the min and max pointers are outliers, but one coule be. This test result gives us a large p-value of 1, which is certain. So we fail to reject the null hypothesis. We can conclude that only one of min and max pointer is the outlier.
+```{r}
+grubbs.test(crime, type = 11)
+```
+II. Second we need to test(10) if  the sample dataset contains one outlier, statistically different than the other values. 
+Null hypothesis: No outlier in one tail. The test gives us a p-value of 0.07. Although the p-value is not very small, we can still reject the null hypothesis at 0.1 level. So the highest value 1993 is an outlier.
+The test of opposite grubb test(10) shows a p-value of 1. The opposite test is used to test an alternative hypothesis of lowest value, instead of highest. Thus we fail to reject the null hypothesis of no outlier in lower tail with p-value = 1. Thus lowest value 342 is not an outlier.
+By combining the above three tests, we conclude that only one of min and max pointer is the outlier, meanwhile the lowest value is not the outlier, so the highest value 1993 is an outlier. So our "crime" data does have at least one outlier.
+```{r}
+grubbs.test(crime, type = 10)
+grubbs.test(crime, type = 10, opposite = TRUE)
+```
+Why can't we run the type = 20 test? It turned out that in order to perform test(20) we need have small sample data (max 30). However, out "crime" data is too large to perform test 20.
+
+We can try to transform the data by log(n) and see if the data is normal. Using log transformation, out "crime" data looks normally distributed(points along the qqline), and has no outliers (no points beyond min and max quantiles).
+```{r}
+log.crime <- log(crime)
+qqnorm(log.crime)
+qqline(log.crime)
+boxplot(log.crime)
+```
+
+

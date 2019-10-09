@@ -1,0 +1,52 @@
+---
+title: "Hw4"
+output: word_document
+---
+
+Question 7.1
+An exponential smoothing model would be appropriate is when measuring everyday's commute time to work. Because the commute time is time-series data and can be highly fluctuated.
+The data needed would be commute times from a year ago. We can take into consideration the holidays: for example, if I am working at Martin Luther King day, my commute time would be much less than average because most of people will be on vacation. 
+Since the commute time can be seriously affected by randomness like car accidents, I expect the alpha be closer to 0 since there is a lot of randomness in the system.
+
+Question 7.2
+First Load the data:
+```{r}
+rm(list = ls())
+temps <- read.table("temps.txt", stringsAsFactors = FALSE, header = TRUE)
+```
+Then convert the data to times series object so they can be recognized in HoltWinters model. View the temps_ts and notice that it has been converted to time-series data. And fit the HoltWinters model - the HoltWinters model combines overall smoothing, trend and seasonality, thus we are setting three of the parameters to "NULL".
+```{r}
+temps_vec <- as.vector(unlist(temps[,2:21]))
+temps_ts <- ts(temps_vec, start=1996, frequency=123)
+plot(temps_ts)
+temps_HW <- HoltWinters(temps_ts, alpha=NULL, beta = NULL, gamma = NULL, seasonal = "multiplicative")
+summary(temps_HW)
+temps_HW
+```
+Smoothing parameters:
+ alpha: 0.615003
+ beta : 0
+ gamma: 0.5495256
+Although the value of beta is 0, it does not mean there is no seasonality. It only means the initial value for beta does not need to update to arrive at minimum MSE.
+
+Next we need to visualize the HoltWinters model.
+```{r}
+plot(temps_HW)
+plot(temps_HW$fitted)
+```
+```{r}
+plot(decompose(temps_ts, type="multiplicative"))
+```
+Judging from the graph, when we decompose each effect and single out the seasonality, We do not see the average temperature change significantly for these years, there is no pattern that the unofficial end of summer has gotten late these years.
+
+Next we can separate the seasonality values, and do a CUSUM model on the fitted values. It is better to separate out the seasonal aspect from HoltWinters and do CUSUM on the resulting seasonal factors created. This is because the impact of trend and randomness are removed during HoltWinters filtering. 
+```{r}
+head(temps_HW$fitted)
+```
+Export season values to excel
+```{r}
+library(openxlsx)
+write.csv(fitted(temps_HW), file = "tempshw.csv")
+```
+Now we can use CUSUM model to detect a decrease: if the unofficial summer has gotton later over the 20 years.
+
